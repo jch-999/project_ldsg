@@ -47,6 +47,10 @@ MAX_FILE_SIZE = 50 * 1024 * 1024              # 单文件上限 50 MB
 MAX_BODY_SIZE = 52 * 1024 * 1024              # multipart 整个请求的上限，留一点表单余量
 PAGE_SIZE = 20                                # 首页每页条数
 
+# 每个连接的读写超时（秒）：最大请求体 52 MB，120 秒对应最低约 443 KB/s，
+# 给慢速家用网络留出余量；中断的连接最多占用一个线程 120 秒。
+CONNECTION_TIMEOUT = 120
+
 ALLOWED_EXT = {
     ".pdf", ".docx", ".pptx", ".xlsx", ".zip",
     ".png", ".jpg", ".jpeg", ".md", ".txt", ".epub",
@@ -154,8 +158,13 @@ class Context:
 # HTTP 请求处理器
 # ---------------------------------------------------------------------------
 
+class BodyReadError(Exception):
+    """请求体在 Content-Length 读完前超时或中断。"""
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "LocalStudyShare/1.0"
+    timeout = CONNECTION_TIMEOUT
 
     # ---- 通用响应方法 -----------------------------------------------------
 
@@ -178,9 +187,12 @@ class Handler(BaseHTTPRequestHandler):
         chunks = []
         remaining = length
         while remaining > 0:
-            chunk = self.rfile.read(min(65536, remaining))
+            try:
+                chunk = self.rfile.read(min(65536, remaining))
+            except OSError as exc:
+                raise BodyReadError("读取请求体失败：%s" % exc) from exc
             if not chunk:
-                break
+                raise BodyReadError("请求体提前结束：还差 %d 字节" % remaining)
             chunks.append(chunk)
             remaining -= len(chunk)
         return b"".join(chunks)
@@ -264,6 +276,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             self.route_post()
+        except BodyReadError as exc:
+            # 请求体没读完时客户端通常已经断开，在这个连接上写 500 会再次阻塞。
+            self.log_message("放弃请求（请求体读取失败）: %r", exc)
+            self.close_connection = True
+            return
         except Exception as exc:
             self.log_message("处理出错: %r", exc)
             traceback.print_exc()

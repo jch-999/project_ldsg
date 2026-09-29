@@ -408,3 +408,229 @@ audit_log actions: ['approve', 'auto_remove', 'reject', 'remove', 'restore', 'up
 6. **管理令牌以明文存在 `config.ini` 里。**
    这是本地小站，能读到 `config.ini` 的人本来就能读到数据库和文件，所以不算额外的
    安全边界。但如果你把项目文件夹分享给别人，记得先改令牌或删掉 `config.ini`。
+
+---
+
+## 7. 第 2 期修复：中途断开请求不再卡死服务（2026-09-29）
+
+### 7.1 实际执行的命令
+
+```powershell
+python -m py_compile app.py db.py config.py metadata.py pages.py; if ($LASTEXITCODE -eq 0) { 'py_compile: OK' }
+python 'C:\Users\jch\AppData\Local\Temp\hermes-verify-hang.py'
+python 'C:\Users\jch\AppData\Local\Temp\hermes-verify-upload-suite.py'
+```
+
+前端脚本需要 `http://127.0.0.1:8000/` 上已有服务。本次用 Python 在一个命令里启动
+`app.py`、等服务就绪后执行下面的脚本、结束后终止服务：
+
+```powershell
+python 'C:\Users\jch\AppData\Local\Temp\hermes-verify-frontend.py'
+```
+
+语法检查真实输出：
+
+```text
+py_compile: OK
+```
+
+### 7.2 修复前复现（真实输出摘录）
+
+```text
+服务已就绪
+
+=== 基线：正常情况下服务响应多快 ===
+  HTTP 200，耗时 1 ms
+
+=== 发送半截请求（声明 47.5MB，实发 5MB 后硬断）===
+  实发 5.0 MB / 声明 47.5 MB
+
+  断连后  1s: !! 无响应 !!  (TimeoutError, 8.0s)
+       -> 服务被卡住了
+  断连后  5s: !! 无响应 !!  (TimeoutError, 8.0s)
+       -> 服务被卡住了
+  断连后 15s: !! 无响应 !!  (TimeoutError, 8.0s)
+       -> 服务被卡住了
+  断连后 30s: !! 无响应 !!  (TimeoutError, 8.0s)
+       -> 服务被卡住了
+
+=== 服务端日志（最后 30 行）===
+  Traceback (most recent call last):
+    ...
+    File "D:\AI输出的文件\project_ldsg\app.py", line 270, in do_POST
+      self.send_html(500, pages.render_message(
+    ...
+    File "D:\AI输出的文件\project_ldsg\app.py", line 168, in send_html
+      self.end_headers()
+```
+
+### 7.3 修复后：卡死专项复测
+
+命令：
+
+```powershell
+python 'C:\Users\jch\AppData\Local\Temp\hermes-verify-hang.py'
+```
+
+真实输出：
+
+```text
+服务已就绪
+
+=== 基线：正常情况下服务响应多快 ===
+  HTTP 200，耗时 1 ms
+
+=== 发送半截请求（声明 47.5MB，实发 5MB 后硬断）===
+  实发 5.0 MB / 声明 47.5 MB
+
+  断连后  1s: 正常  (HTTP 200, 0.0s)
+  断连后  5s: 正常  (HTTP 200, 0.0s)
+  断连后 15s: 正常  (HTTP 200, 0.0s)
+  断连后 30s: 正常  (HTTP 200, 0.0s)
+
+=== 服务端日志（最后 30 行）===
+  ==============================================================
+   课程资料共享站 已启动
+   请在浏览器打开下面的地址：
+  
+     首页：   http://127.0.0.1:8822/
+     上传：   http://127.0.0.1:8822/upload
+     管理页： http://127.0.0.1:8822/admin
+     关于：   http://127.0.0.1:8822/about
+  
+   管理令牌：t
+   （令牌也可以改 config.ini 里的 admin_token，或用环境变量 LDSG_ADMIN_TOKEN 覆盖）
+  
+   停止服务：在本窗口按 Ctrl+C
+  ==============================================================
+  
+  [18:59:51] "GET / HTTP/1.1" 200 -
+  [18:59:51] "GET / HTTP/1.1" 200 -
+  [18:59:51] 放弃请求（请求体读取失败）: BodyReadError('读取请求体失败：[WinError 10054] 远程主机强迫关闭了一个现有的连接。')
+  [18:59:52] "GET / HTTP/1.1" 200 -
+  [18:59:56] "GET / HTTP/1.1" 200 -
+  [19:00:06] "GET / HTTP/1.1" 200 -
+  [19:00:21] "GET / HTTP/1.1" 200 -
+```
+
+结论：四个探测点全部恢复正常。半截请求只触发了当前连接的
+`BodyReadError` 日志并关闭该连接，没有再把服务卡住。
+
+### 7.4 修复后：上传鲁棒性全量复测
+
+命令：
+
+```powershell
+python 'C:\Users\jch\AppData\Local\Temp\hermes-verify-upload-suite.py'
+```
+
+真实输出：
+
+```text
+临时目录：C:\Users\jch\AppData\Local\Temp\hermes-verify-ldsg-13205z21
+
+=== 准备：造样本 ===
+  [PASS] 造样本 big_45mb.pdf
+         目标 45.0MB，实际 47.5MB
+  [PASS] 造样本 over_51mb.pdf
+         目标 51.0MB，实际 53.8MB
+  [PASS] 造样本 中文课件_高等数学期中试题.pdf
+         目标 0.3MB，实际 0.3MB
+
+=== 启动服务 ===
+  [PASS] 服务启动并就绪
+         基址 http://127.0.0.1:8811
+
+--- 测试 1：中文文件名与中文标题 ---
+  [PASS] 中文上传返回 200
+         HTTP 200
+  [PASS] 页面正确回显中文标题
+         上传成功，等待审核 · 课程资料共享 课程资料 共享站 首页 上传资料 管理页 关于 上传成功，等待审核 《高数期中试题》已保存。管理员审核通过后，它才会出现在首页。系统已执行元数据清除：已尽力清除 PDF 的 /Info 与 XMP 元数
+  [PASS] 数据库 title 无乱码
+         title='高数期中试题'
+  [PASS] 数据库 category 无乱码
+         category='笔记'
+  [PASS] 数据库 original_name 无乱码
+         original_name='中文课件_高等数学期中试题.pdf'
+  [PASS] 系统生成的规范文件名不含原始名
+         file_name='MATH1001_笔记_2026S1_3c8b93ae.pdf'
+
+--- 测试 2：47.5MB 大文件 ---
+  [PASS] 大文件上传返回 200
+         HTTP 200，耗时 1.33s
+  [PASS] 页面提示已保存
+  [PASS] 落盘大小与记录一致
+         磁盘 49,772,136 / 库 49,772,136 / 原 49,772,136
+  [PASS] sha256 逐字节一致
+         磁盘 d0bb6d3f96bf86df09a5f6ac…
+         库   d0bb6d3f96bf86df09a5f6ac…
+  [PASS] 落盘文件已清除 Author
+  [PASS] 落盘文件已清除 Producer
+  [PASS] 落盘文件正文完好（页数仍在）
+         Page 对象数 = 21
+
+--- 测试 3：53.8MB 超限文件（绕过前端直发）---
+  [PASS] 服务端拒绝超限请求（连接被提前关闭）
+         客户端报 ConnectionAbortedError，属预期：服务端已提前响应
+  [PASS] 超限文件未写入数据库
+         2 -> 2
+
+--- 测试 4：断网中断（传一半掐断连接）---
+  [PASS] 成功模拟部分传输后掐断
+         声明 47.5MB，实发 5.0MB
+  [PASS] 没有残留半个文件
+         新增文件: 无
+  [PASS] 数据库无脏记录
+         2 -> 2
+  [PASS] 服务仍正常响应
+         HTTP 200（耗时 0.0s）
+  [PASS] 中断后仍能正常接收新文件
+         HTTP 200，记录 2 -> 3
+
+已清理：C:\Users\jch\AppData\Local\Temp\hermes-verify-ldsg-13205z21 及仓库运行数据
+
+==========================================================
+共 24 项，通过 24 项，失败 0 项
+结论：验收清单第 15 条的三项要求（大文件 / 中文文件名 / 断网中断后重试）全部通过
+```
+
+### 7.5 修复后：前端校验复测
+
+真实输出：
+
+```text
+READY=OK
+已从线上 /upload 抓到校验脚本（2181 字符）
+测试页：C:\Users\jch\AppData\Local\Temp\hermes-verify-frontend-check.html
+
+--- 超限文件（53.8 MB, over_51mb.pdf）---
+  {"asked_mb":53.8,"actual_bytes":56623104,"actual_mb":54,"name":"over_51mb.pdf","ext":"pdf","blocked":true,"reason":"超过 50MB 上限","would_submit":false}
+
+--- 合规大文件（47.5 MB, big_45mb.pdf）---
+  {"asked_mb":47.5,"actual_bytes":50331648,"actual_mb":48,"name":"big_45mb.pdf","ext":"pdf","blocked":false,"reason":"","would_submit":true}
+
+--- 小文件（0.3 MB, 中文课件.pdf）---
+  {"asked_mb":0.3,"actual_bytes":1048576,"actual_mb":1,"name":"中文课件.pdf","ext":"pdf","blocked":false,"reason":"","would_submit":true}
+
+--- 黑名单类型（2.0 MB, virus.exe）---
+  {"asked_mb":2,"actual_bytes":2097152,"actual_mb":2,"name":"virus.exe","ext":"exe","blocked":true,"reason":"类型不在白名单","would_submit":false}
+
+--- 45MB 合规（45.0 MB, 接近上限.pdf）---
+  {"asked_mb":45,"actual_bytes":47185920,"actual_mb":45,"name":"接近上限.pdf","ext":"pdf","blocked":false,"reason":"","would_submit":true}
+
+==================================================
+全部通过：前端校验行为与预期一致
+FRONTEND_EXIT=0
+```
+
+### 7.6 本次修复未验证到的地方
+
+1. **没有用真实慢速链路验证 120 秒够不够。** 120 秒的选择依据是最大请求体
+   52 MB 在 120 秒内只需约 443 KB/s，且本机 47.5 MB 上传实测 1.33 秒；
+   但没有在真实弱网、跨公网或限速环境下跑满 52 MB。
+2. **没有做大量并发半截请求的压测。** 本次只验证了单个中途断开请求不会再卡住
+   服务，验证了它会正常断开；没有验证几十/几百个同时挂起的连接。
+3. **没有测试 TLS/反向代理场景。** 当前项目本身是 `http.server` 明文 HTTP；
+   TLS、代理层读超时不在本次改动范围内。
+4. **前端脚本仍只验证上传页 JS 的 50 MB / 扩展名判定逻辑，不是完整浏览器点击上传。**
+   这与第 1 期的限制相同。
