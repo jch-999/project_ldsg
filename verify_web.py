@@ -21,6 +21,7 @@ Web 功能 · 手工验证脚本
 
 import http.client
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -157,7 +158,21 @@ def main():
               b"maxBytes" in body and b"allowed.indexOf" in body and b"50 * 1024 * 1024" in body, "")
 
         status, body = client.request("GET", "/about")
-        check("GET /about 返回 200 且是中文", status == 200 and "版权说明".encode("utf-8") in body, "status=%d" % status)
+        # 判据查的是 BRIEF 的实质要求（版权说明 + 投诉通道），不查某一版的具体措辞——
+        # 页面文案会演进，锁死字符串会让「功能好的」被误报成 FAIL。
+        about_text = body.decode("utf-8", "replace")
+        check("GET /about 返回 200 且含免责/版权与投诉两节",
+              status == 200 and "非官方声明" in about_text and "投诉" in about_text
+              and "著作权" in about_text,
+              "status=%d" % status)
+
+        # ---- 1b. 版权区必须带 /about 链接（语义判据，不看引号风格）----
+        # 判据只认「这个 href 指向 /about」这件事本身，不管源码用单引号还是双引号。
+        status, body = client.request("GET", "/")
+        html = body.decode("utf-8", "replace")
+        footer = html[html.rfind("<footer"):html.rfind("</footer>") + 9] if "<footer" in html else ""
+        about_hrefs = re.findall(r'href\s*=\s*["\'](/about)["\']', footer)
+        check("首页版权区含指向 /about 的链接", bool(about_hrefs), "footer 片段=%r" % footer[:120])
 
         status, body = client.request("GET", "/no-such-page")
         check("不存在的页面返回 404 和中文提示", status == 404 and "页面不存在".encode("utf-8") in body, "status=%d" % status)

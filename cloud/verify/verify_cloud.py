@@ -125,6 +125,20 @@ def main():
     print("\n[0] 服务存活")
     st, _, _ = req("/")
     ck("首页 200", st == 200, f"{st}")
+
+    # 版权区必须带指向 /about 的链接。判据只看「href 指向 /about」这件事，
+    # 不管源码里是单引号还是双引号包住的 —— 锁引号风格会让对的被误报成 FAIL。
+    st, body, _ = req("/")
+    html = body.decode("utf-8", "replace")
+    footer = html[html.rfind("<footer"):html.rfind("</footer>") + 9] if "<footer" in html else ""
+    ck("首页版权区含指向 /about 的链接",
+       bool(re.search(r'href\s*=\s*["\']/about["\']', footer)), f"footer={footer[:120]!r}")
+
+    st, body, _ = req("/about")
+    about_text = body.decode("utf-8", "replace")
+    ck("关于页 200 且含免责/版权与投诉两节",
+       st == 200 and "非官方声明" in about_text and "投诉" in about_text
+       and "著作权" in about_text, f"{st}")
     if st != 200:
         print("\n服务未就绪。请先运行：npx wrangler dev --port %d" % PORT)
         return 2
