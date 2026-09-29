@@ -1,0 +1,13 @@
+{
+  "name": "project-ldsg-cloud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "db:local": "wrangler d1 execute ldsg --local --file=schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "4.143.0"
+  }
+}

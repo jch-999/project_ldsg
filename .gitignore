@@ -19,6 +19,11 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
+# 云端版（cloud/）：本地密钥与构建产物，绝不入库
+.dev.vars
+.wrangler/
+node_modules/
+
 # 测试产物
 *.tmp
 *.log

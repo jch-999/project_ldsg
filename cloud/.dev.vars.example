@@ -1,0 +1,14 @@
+# 本地开发环境变量模板
+#
+# 用法：复制成 .dev.vars，填上自己的值。.dev.vars 已被 .gitignore 忽略，不会入库。
+#
+#     cp .dev.vars.example .dev.vars
+#
+# wrangler dev 启动时会自动读取 .dev.vars。
+
+# 管理页登录令牌。随便设一个自己记得住的字符串即可（仅本地开发用）。
+ADMIN_TOKEN=dev-admin-token
+
+# 给访客 IP 做 HMAC 用的密钥。作用：数据库里只存 IP 的 HMAC，不存明文 IP。
+# 正式部署时换成随机值，例如：openssl rand -hex 32
+IP_HMAC_KEY=change-me-to-a-random-secret
