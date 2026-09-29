@@ -3,8 +3,10 @@ import { createStorage, sha256Hex } from "../storage.js";
 import { ipHmac, preflight } from "../preflight.js";
 import { renderMessage, renderUpload, htmlResponse } from "../pages.js";
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
-const MAX_BODY_SIZE = 52 * 1024 * 1024;
+// 存储临时用 D1（R2 需绑信用卡才能开通），D1 单值硬上限 2 MB。
+// 上传上限随之设在 2 MB 以内，避免用户传了才在存储层失败。
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const MAX_BODY_SIZE = 3 * 1024 * 1024;
 
 const ALLOWED_EXT = new Set([
   ".pdf", ".docx", ".pptx", ".xlsx", ".zip",
@@ -40,7 +42,7 @@ export async function handleUpload(request, env) {
 
   const contentLength = Number.parseInt(request.headers.get("Content-Length") || "0", 10);
   if (Number.isFinite(contentLength) && contentLength > MAX_BODY_SIZE) {
-    return htmlResponse(renderUpload("整个请求超过 52 MB，请选择更小的文件（单个文件上限 50 MB）。"), 413);
+    return htmlResponse(renderUpload("整个请求超过 3 MB，请选择更小的文件（单个文件上限 2 MB）。"), 413);
   }
 
   let form;
@@ -86,7 +88,7 @@ export async function handleUpload(request, env) {
   }
   if (file.size > MAX_FILE_SIZE) {
     return htmlResponse(renderUpload(
-      `文件太大：${(file.size / 1024 / 1024).toFixed(1)} MB，上限 50 MB。`,
+      `文件太大：${(file.size / 1024 / 1024).toFixed(1)} MB，上限 2 MB。`,
       formValues,
     ), 413);
   }
@@ -97,7 +99,7 @@ export async function handleUpload(request, env) {
   }
   if (rawBytes.byteLength > MAX_FILE_SIZE) {
     return htmlResponse(renderUpload(
-      `文件太大：${(rawBytes.byteLength / 1024 / 1024).toFixed(1)} MB，上限 50 MB。`,
+      `文件太大：${(rawBytes.byteLength / 1024 / 1024).toFixed(1)} MB，上限 2 MB。`,
       formValues,
     ), 413);
   }

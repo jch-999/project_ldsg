@@ -2,11 +2,15 @@ name = "ldsg-cloud"
 main = "src/index.js"
 compatibility_date = "2025-09-01"
 
+# D1：账号总库 97083fdb270b711409d8e90b73831da9，创建于 2026-09-29（区域 APAC）
 [[d1_databases]]
 binding = "DB"
 database_name = "ldsg"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "6f0bc193-b88b-45de-9fb1-1227bb37914c"
 
-[[r2_buckets]]
-binding = "FILES"
-bucket_name = "ldsg-files"
+# R2 绑定暂时停用：开通 R2 需要绑定带 CVV 的支付方式，当前账号无法满足。
+# 文件字节现由 D1 的 files 表承载（见 src/storage.js 的 D1Storage）。
+# 将来开通 R2 后取消下面注释、并调整 createStorage 的优先顺序即可。
+# [[r2_buckets]]
+# binding = "FILES"
+# bucket_name = "ldsg-files"

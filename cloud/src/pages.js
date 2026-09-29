@@ -318,7 +318,7 @@ const UPLOAD_FORM_JS = `
   var nameBox = document.getElementById("file-name");
   var errorBox = document.getElementById("client-error");
   var allowed = ["pdf","docx","pptx","xlsx","zip","png","jpg","jpeg","md","txt","epub"];
-  var maxBytes = 50 * 1024 * 1024;
+  var maxBytes = 2 * 1024 * 1024;
 
   function showError(msg) {
     errorBox.textContent = msg || "";
@@ -334,7 +334,7 @@ const UPLOAD_FORM_JS = `
       return false;
     }
     if (file.size > maxBytes) {
-      showError("文件太大：" + (file.size / 1024 / 1024).toFixed(1) + " MB，上限 50 MB。");
+      showError("文件太大：" + (file.size / 1024 / 1024).toFixed(1) + " MB，上限 2 MB。");
       return false;
     }
     showError("");
@@ -390,7 +390,7 @@ export function renderUpload(error = null, values = {}, duplicate = null) {
 
   parts.push(
     '<div class="flash info">上传后资料进入“待审核”状态，不会马上公开。' +
-    '单个文件不超过 50 MB。系统会自动清除文档和图片里的作者 / 公司 / EXIF 等元数据。</div>',
+    '单个文件不超过 2 MB。系统会自动清除文档和图片里的作者 / 公司 / EXIF 等元数据。</div>',
   );
 
   const categories = ["笔记", "真题", "课件", "教材", "其他"];
@@ -405,7 +405,7 @@ export function renderUpload(error = null, values = {}, duplicate = null) {
   parts.push('<div id="client-error" class="flash bad" style="display:none"></div>');
   parts.push(
     '<div id="dropzone" class="dropzone">把文件拖到这里，或者点这里选择文件<br>' +
-    '<span class="small">pdf / docx / pptx / xlsx / zip / png / jpg / md / txt / epub，≤ 50 MB</span></div>',
+    '<span class="small">pdf / docx / pptx / xlsx / zip / png / jpg / md / txt / epub，≤ 2 MB</span></div>',
   );
   parts.push(
     '<input id="file-input" type="file" name="file" style="display:none" ' +

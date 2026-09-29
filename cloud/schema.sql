@@ -89,3 +89,14 @@ CREATE INDEX IF NOT EXISTS idx_reports_material
     ON reports (material_id, status);
 CREATE INDEX IF NOT EXISTS idx_intercept_created
     ON intercept_log(created_at);
+
+-- 文件字节表：R2 需要信用卡才能开通，故临时用 D1 直接存文件。
+-- 官方硬限制：单个 BLOB/单行 ≤ 2,000,000 字节（2 MB）；免费版单库上限 500 MB。
+-- 将来接入 R2 或其他对象存储后，本表可停用（业务代码已通过 storage.js 抽象）。
+CREATE TABLE IF NOT EXISTS files (
+    file_key    TEXT PRIMARY KEY,
+    bytes       BLOB NOT NULL,
+    size        INTEGER NOT NULL,
+    sha256      TEXT,
+    created_at  TEXT NOT NULL
+);
